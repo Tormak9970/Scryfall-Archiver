@@ -6,13 +6,13 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use serde_json;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct BulkDataItem {
   name: String,
   download_uri: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct BulkDataResponse {
   data: Vec<BulkDataItem>,
 }
@@ -28,6 +28,16 @@ struct Card {
 struct CardFace {
   image_uris: Option<ImageUris>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Ruling {
+  object: String,
+  oracle_id: String,
+  source: String,
+  published_at: String,
+  comment: String,
+}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ImageUris {
@@ -112,7 +122,7 @@ fn download_card_images(client: &Client, card_id: &str, image_uris: &ImageUris, 
   return Ok(());
 }
 
-fn fetch_card_images(client: Client, cards: Vec<Card>, images_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn fetch_card_images(client: &Client, cards: Vec<Card>, images_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
   println!("Downloading card images...");
 
   for (i, card) in cards.iter().enumerate() {
@@ -136,30 +146,8 @@ fn fetch_card_images(client: Client, cards: Vec<Card>, images_dir: &PathBuf) -> 
   return Ok(());
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-  // Setup
-  let output_dir = Path::new("output");
-  let images_dir = output_dir.join("card-images");
-  
-  fs::create_dir_all(&images_dir)?;
-
-  let mut default_headers = HeaderMap::new();
-  default_headers.append("User-Agent", HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"));
-  default_headers.append("Accept", HeaderValue::from_static("*/*"));
-
-  let client = Client::builder()
-    .default_headers(default_headers)
-    .timeout(Duration::from_secs(60))
-    .build()?;
-
-  // Download Data
-  println!("Fetching Scryfall bulk data list...");
-  let bulk_data_resp: BulkDataResponse = client
-      .get("https://api.scryfall.com/bulk-data")
-      .send()?
-      .json()?;
-
-  let default_cards_url = bulk_data_resp
+fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images_dir: &PathBuf, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+  let default_cards_url = bulk_data
       .data
       .into_iter()
       .find(|item| item.name == "Default Cards")
@@ -182,9 +170,62 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
   }
 
-  let _ = fetch_card_images(client, cards, &images_dir);
+  let _ = fetch_card_images(&client, cards, images_dir);
 
-  // fetch_card_rulings()
+  return Ok(());
+}
+
+fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+  let rulings_url = bulk_data
+      .data
+      .into_iter()
+      .find(|item| item.name == "Rulings")
+      .expect("Could not find rulings")
+      .download_uri;
+
+  println!("Rulings URL: {}", rulings_url);
+
+  println!("Downloading card ruling data...");
+  let cards: Vec<Ruling> = client.get(&rulings_url).send()?.json()?;
+  
+  let ruling_data_filename = output_dir.join("ruling-data.json");
+
+  let write_res = fs::write(ruling_data_filename, serde_json::to_string(&cards)?);
+
+  if write_res.is_err() {
+    let err = write_res.err().unwrap();
+    println!("ERROR: Failed to write ruling data: {}", err.to_string());
+  }
+
+  return Ok(());
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+  // Setup
+  let output_dir = Path::new("output");
+  let images_dir = output_dir.join("card-images");
+  
+  fs::create_dir_all(&images_dir)?;
+
+  let mut default_headers = HeaderMap::new();
+  default_headers.append("User-Agent", HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"));
+  default_headers.append("Accept", HeaderValue::from_static("*/*"));
+
+  let client = Client::builder()
+    .default_headers(default_headers)
+    .timeout(Duration::from_secs(60))
+    .build()?;
+
+  // Download Data
+  println!("Fetching Scryfall bulk data list...");
+  let bulk_data: BulkDataResponse = client
+      .get("https://api.scryfall.com/bulk-data")
+      .send()?
+      .json()?;
+
+  let _ = download_card_data(&client, bulk_data.clone(), &images_dir, output_dir);
+
+  let _ = download_card_rulings(&client, bulk_data, output_dir);
 
   println!("Backup Complete.");
   return Ok(());
