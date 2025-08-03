@@ -2,9 +2,11 @@ use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 use serde_json;
+
+use std::{env::var, path::{Path, PathBuf}};
+use dotenv::dotenv;
 
 #[derive(Debug, Deserialize, Clone)]
 struct BulkDataItem {
@@ -201,8 +203,11 @@ fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_di
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+  dotenv().ok();
+
   // Setup
-  let output_dir = Path::new("output");
+  let output_dir_str = var("SA_DATA_DIR").unwrap();
+  let output_dir  = Path::new(&output_dir_str);
   let images_dir = output_dir.join("card-images");
   
   fs::create_dir_all(&images_dir)?;

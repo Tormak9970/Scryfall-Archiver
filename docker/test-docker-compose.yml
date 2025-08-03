@@ -1,0 +1,22 @@
+name: scryfall-archiver
+
+services:
+  nrm-server:
+    container_name: scryfall-archiver
+    command: ['/scryfall-archiver']
+    image: scryfall-archiver:latest
+    build:
+      context: ../src
+      dockerfile: ./Dockerfile
+    restart: unless-stopped
+    volumes:
+      - C:/Users/Tormak/Desktop/NRM:/data
+    env_file:
+      - .env
+    environment:
+      SA_DATA_DIR: /data
+      SA_BACKUP_SCHEDULE: "0 0 3 * * * *"
+      SA_VERSION: "1.0.0"
+      RUST_LOG: info
+    healthcheck:
+      disable: false
