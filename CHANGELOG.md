@@ -6,6 +6,11 @@ All notable changes to Scryfall Archiver will be recorded in this file.
 
 <!-- replace me with new updates! -->
 
+## v0.5.2
+
+Bug Fixes
+* accounted for bad image urls ([fd1735f](https://github.com/Tormak9970/Scryfall-Archiver/commit/fd1735f))
+
 ## v0.5.1
 
 Bug Fixes
