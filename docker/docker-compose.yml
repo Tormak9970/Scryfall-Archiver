@@ -1,7 +1,7 @@
 name: scryfall-archiver
 
 services:
-  nrm-server:
+  scryfall-archiver:
     container_name: scryfall-archiver
     command: ['/scryfall-archiver']
     image: scryfall-archiver:latest
@@ -15,7 +15,7 @@ services:
       - .env
     environment:
       SA_DATA_DIR: /data
-      SA_ARCHIVE_SCHEDULE: ${SA_ARCHIVE_SCHEDULE:-"0 0 3 * * * *"}
+      SA_ARCHIVE_SCHEDULE: "0 2 1 * *"
       SA_BACKUP_SMALL_IMAGE: false
       SA_BACKUP_NORMAL_IMAGE: false
       SA_BACKUP_LARGE_IMAGE: false
