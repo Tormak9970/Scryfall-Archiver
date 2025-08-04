@@ -3,6 +3,34 @@
 A docker container for routinely archiving Scryfall's Magic: The Gathering database.
 
 
+### Setup / Install
+To run Scryfall Archiver, simply use the following docker-compose, with any changes you would like to make:
+```yaml
+name: scryfall-archiver
+
+services:
+  scryfall-archiver:
+    container_name: scryfall-archiver
+    image: index.docker.io/travislane/scryfall-archiver:latest
+    environment:
+      SA_DATA_DIR: /data
+      SA_ARCHIVE_SCHEDULE: "0 2 1 * *"
+      SA_BACKUP_SMALL_IMAGE: false
+      SA_BACKUP_NORMAL_IMAGE: false
+      SA_BACKUP_LARGE_IMAGE: false
+      SA_BACKUP_PNG_IMAGE: true
+      SA_BACKUP_ART_CROP_IMAGE: false
+      SA_BACKUP_BORDER_CROP_IMAGE: false
+      SA_VERSION: "1.0.0"
+      RUST_LOG: info
+    volumes:
+      - /YOUR/DATA/PATH:/data
+    restart: unless-stopped
+    healthcheck:
+      disable: false
+```
+
+
 ## Configuration
 
 ### Environment Variables
