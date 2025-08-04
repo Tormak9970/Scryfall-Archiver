@@ -15,7 +15,13 @@ services:
       - .env
     environment:
       SA_DATA_DIR: /data
-      SA_BACKUP_SCHEDULE: ${SA_BACKUP_SCHEDULE:-"0 0 3 * * * *"}
+      SA_ARCHIVE_SCHEDULE: ${SA_ARCHIVE_SCHEDULE:-"0 0 3 * * * *"}
+      SA_BACKUP_SMALL_IMAGE: false
+      SA_BACKUP_NORMAL_IMAGE: false
+      SA_BACKUP_LARGE_IMAGE: false
+      SA_BACKUP_PNG_IMAGE: true
+      SA_BACKUP_ART_CROP_IMAGE: false
+      SA_BACKUP_BORDER_CROP_IMAGE: false
       SA_VERSION: "1.0.0"
       RUST_LOG: info
     healthcheck:

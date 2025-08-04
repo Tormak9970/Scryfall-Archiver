@@ -1,3 +1,4 @@
+use log::{info, warn};
 use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
@@ -73,11 +74,10 @@ fn url_to_filename(url: &str) -> String {
 
 fn download_card_image(client: &Client, card_id: &str, url: String, images_dir: &Path) -> Result<u8, Box<dyn std::error::Error>> {
   let image_path = url_to_filename(&url);
-  println!("{image_path}");
   let file_path = images_dir.join(&image_path);
 
   if file_path.exists() {
-    println!("Found cache, skipping: {}", file_path.display());
+    info!("Found cache, skipping: {}", file_path.display());
     return Ok(0);
   }
 
@@ -88,12 +88,12 @@ fn download_card_image(client: &Client, card_id: &str, url: String, images_dir: 
   let res = fs::write(&file_path, resp.bytes()?);
   if res.is_err() {
     let err = res.err().unwrap();
-    println!("ERROR: Failed to write card image for {}: {}", card_id, err.to_string());
+    warn!("Failed to write card image for {}: {}", card_id, err.to_string());
 
     return Ok(2);
   }
 
-  println!("Downloaded: {}", file_path.display());
+  info!("Downloaded: {}", file_path.display());
 
   return Ok(1);
 }
@@ -107,7 +107,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
     match image_uris.small.clone() {
       Some(url) => {
         let _ = download_card_image(&client, card_id, url, images_dir);
-        println!("Downloaded small image for {}", card_id);
+        info!("Downloaded small image for {}", card_id);
       },
       None => {},
     }
@@ -117,7 +117,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
     match image_uris.normal.clone() {
       Some(url) => {
         let _ = download_card_image(&client, card_id, url, images_dir);
-        println!("Downloaded normal image for {}", card_id);
+        info!("Downloaded normal image for {}", card_id);
       },
       None => {},
     }
@@ -127,7 +127,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
     match image_uris.large.clone() {
       Some(url) => {
         let _ = download_card_image(&client, card_id, url, images_dir);
-        println!("Downloaded large image for {}", card_id);
+        info!("Downloaded large image for {}", card_id);
       },
       None => {},
     }
@@ -137,7 +137,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
     match image_uris.png.clone() {
       Some(url) => {
         let _ = download_card_image(&client, card_id, url, images_dir);
-        println!("Downloaded png image for {}", card_id);
+        info!("Downloaded png image for {}", card_id);
       },
       None => {},
     }
@@ -147,7 +147,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
     match image_uris.art_crop.clone() {
       Some(url) => {
         let _ = download_card_image(&client, card_id, url, images_dir);
-        println!("Downloaded art_crop image for {}", card_id);
+        info!("Downloaded art_crop image for {}", card_id);
       },
       None => {},
     }
@@ -157,7 +157,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
     match image_uris.border_crop.clone() {
       Some(url) => {
         let _ = download_card_image(&client, card_id, url, images_dir);
-        println!("Downloaded border_crop image for {}", card_id);
+        info!("Downloaded border_crop image for {}", card_id);
       },
       None => {},
     }
@@ -167,7 +167,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
 }
 
 fn fetch_card_images(client: &Client, cards: Vec<Card>, images_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-  println!("Downloading card images...");
+  info!("Downloading card images...");
 
   let images_config = ImagesConfig {
     small: bool_var("SA_BACKUP_SMALL_IMAGE"),
@@ -193,7 +193,7 @@ fn fetch_card_images(client: &Client, cards: Vec<Card>, images_dir: &PathBuf) ->
       }
     }
     
-    println!("STATUS: {}/{} cards downloaded", i + 1, cards.len());
+    info!("STATUS: {}/{} cards downloaded", i + 1, cards.len());
   }
 
   return Ok(());
@@ -207,9 +207,9 @@ fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images_dir: 
       .expect("Could not find default cards")
       .download_uri;
 
-  println!("Default Cards URL: {}", default_cards_url);
+  info!("Default Cards URL: {}", default_cards_url);
 
-  println!("Downloading bulk card data...");
+  info!("Downloading bulk card data...");
   let cards: Vec<Card> = client.get(&default_cards_url).send()?.json()?;
   
   let bulk_data_filename = output_dir.join("bulk-data.json");
@@ -218,7 +218,7 @@ fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images_dir: 
 
   if write_res.is_err() {
     let err = write_res.err().unwrap();
-    println!("ERROR: Failed to write card data: {}", err.to_string());
+    warn!("Failed to write card data: {}", err.to_string());
 
     return Ok(());
   }
@@ -236,9 +236,9 @@ fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_di
       .expect("Could not find rulings")
       .download_uri;
 
-  println!("Rulings URL: {}", rulings_url);
+  info!("Rulings URL: {}", rulings_url);
 
-  println!("Downloading card ruling data...");
+  info!("Downloading card ruling data...");
   let cards: Vec<Ruling> = client.get(&rulings_url).send()?.json()?;
   
   let ruling_data_filename = output_dir.join("ruling-data.json");
@@ -247,7 +247,7 @@ fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_di
 
   if write_res.is_err() {
     let err = write_res.err().unwrap();
-    println!("ERROR: Failed to write ruling data: {}", err.to_string());
+    warn!("Failed to write ruling data: {}", err.to_string());
   }
 
   return Ok(());
@@ -271,7 +271,7 @@ pub fn archive_scryfall() -> Result<(), Box<dyn std::error::Error>> {
     .build()?;
 
   // Download Data
-  println!("Fetching Scryfall bulk data list...");
+  info!("Fetching Scryfall bulk data list...");
   let bulk_data: BulkDataResponse = client
       .get("https://api.scryfall.com/bulk-data")
       .send()?
@@ -281,6 +281,6 @@ pub fn archive_scryfall() -> Result<(), Box<dyn std::error::Error>> {
 
   let _ = download_card_rulings(&client, bulk_data, output_dir);
 
-  println!("Backup Complete.");
+  info!("Archive Complete.");
   return Ok(());
 }
