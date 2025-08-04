@@ -37,8 +37,8 @@ services:
 
 | Variable                        | Required | Description |
 | :------------------------------ | :------: | :---------- |
-|  `SA_DATA_DIR`                  |   Yes    | The directory where data is saved. Changing this means you **need** to change where your `Data` volume is mounted to |
-|  `SA_ARCHIVE_SCHEDULE`          |   Yes    | A CRON schedule for archiving data. By default it is set to once a month. Anything more than weekly is probably excessive |
+|  `SA_DATA_DIR`                  |   No     | The directory where data is saved. Changing this means you **need** to change where your `Data` volume is mounted to |
+|  `SA_ARCHIVE_SCHEDULE`          |   No     | A CRON schedule for archiving data. By default it is set to once a month. Anything more than weekly is probably excessive |
 |  `SA_BACKUP_SMALL_IMAGE`        |   Yes    | Whether to download the `small` image for each card |
 |  `SA_BACKUP_NORMAL_IMAGE`       |   Yes    | Whether to download the `normal` image for each card |
 |  `SA_BACKUP_LARGE_IMAGE`        |   Yes    | Whether to download the `large` image for each card |
