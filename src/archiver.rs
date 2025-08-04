@@ -1,12 +1,18 @@
 use log::{info, warn};
-use reqwest::blocking::Client;
+use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
+use tokio::fs::File;
+use tokio::io::BufWriter;
 use std::fs;
+use std::io::BufReader;
 use std::time::Duration;
 use serde_json;
+use futures_util::StreamExt;
 
 use std::{env::var, path::{Path, PathBuf}};
+
+use crate::json_stream::iter_json_array;
 
 #[derive(Debug, Deserialize, Clone)]
 struct BulkDataItem {
@@ -72,7 +78,7 @@ fn url_to_filename(url: &str) -> String {
   return path_segment.to_string();
 }
 
-fn download_card_image(client: &Client, card_id: &str, url: String, images_dir: &Path) -> Result<u8, Box<dyn std::error::Error>> {
+async fn download_card_image(client: &Client, card_id: &str, url: String, images_dir: &Path) -> Result<u8, Box<dyn std::error::Error>> {
   let image_path = url_to_filename(&url);
   let file_path = images_dir.join(&image_path);
 
@@ -83,9 +89,9 @@ fn download_card_image(client: &Client, card_id: &str, url: String, images_dir: 
 
   fs::create_dir_all(file_path.parent().unwrap())?;
 
-  let resp = client.get(&url).send()?;
+  let resp = client.get(&url).send().await?;
     
-  let res = fs::write(&file_path, resp.bytes()?);
+  let res = fs::write(&file_path, resp.bytes().await?);
   if res.is_err() {
     let err = res.err().unwrap();
     warn!("Failed to write card image for {}: {}", card_id, err.to_string());
@@ -102,11 +108,11 @@ fn bool_var(key: &str) -> bool {
   return (var(key).unwrap_or(String::from("false"))).eq("true");
 }
 
-fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: &str, image_uris: &ImageUris, images_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+async fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: &str, image_uris: &ImageUris, images_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
   if images_config.small {
     match image_uris.small.clone() {
       Some(url) => {
-        let _ = download_card_image(&client, card_id, url, images_dir);
+        let _ = download_card_image(&client, card_id, url, images_dir).await;
         info!("Downloaded small image for {}", card_id);
       },
       None => {},
@@ -116,7 +122,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
   if images_config.normal {
     match image_uris.normal.clone() {
       Some(url) => {
-        let _ = download_card_image(&client, card_id, url, images_dir);
+        let _ = download_card_image(&client, card_id, url, images_dir).await;
         info!("Downloaded normal image for {}", card_id);
       },
       None => {},
@@ -126,7 +132,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
   if images_config.large {
     match image_uris.large.clone() {
       Some(url) => {
-        let _ = download_card_image(&client, card_id, url, images_dir);
+        let _ = download_card_image(&client, card_id, url, images_dir).await;
         info!("Downloaded large image for {}", card_id);
       },
       None => {},
@@ -136,7 +142,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
   if images_config.png {
     match image_uris.png.clone() {
       Some(url) => {
-        let _ = download_card_image(&client, card_id, url, images_dir);
+        let _ = download_card_image(&client, card_id, url, images_dir).await;
         info!("Downloaded png image for {}", card_id);
       },
       None => {},
@@ -146,7 +152,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
   if images_config.art_crop {
     match image_uris.art_crop.clone() {
       Some(url) => {
-        let _ = download_card_image(&client, card_id, url, images_dir);
+        let _ = download_card_image(&client, card_id, url, images_dir).await;
         info!("Downloaded art_crop image for {}", card_id);
       },
       None => {},
@@ -156,7 +162,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
   if images_config.border_crop {
     match image_uris.border_crop.clone() {
       Some(url) => {
-        let _ = download_card_image(&client, card_id, url, images_dir);
+        let _ = download_card_image(&client, card_id, url, images_dir).await;
         info!("Downloaded border_crop image for {}", card_id);
       },
       None => {},
@@ -166,7 +172,7 @@ fn download_card_images(images_config: &ImagesConfig, client: &Client, card_id: 
   return Ok(());
 }
 
-fn fetch_card_images(client: &Client, cards: Vec<Card>, images_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+async fn fetch_card_images(client: &Client, bulk_data_filename: &PathBuf, images_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
   info!("Downloading card images...");
 
   let images_config = ImagesConfig {
@@ -178,57 +184,78 @@ fn fetch_card_images(client: &Client, cards: Vec<Card>, images_dir: &PathBuf) ->
     border_crop: bool_var("SA_BACKUP_BORDER_CROP_IMAGE"),
   };
 
-  for (i, card) in cards.iter().enumerate() {
+  let reader = BufReader::with_capacity(500000, std::fs::File::open(bulk_data_filename)?);
+
+  let mut num_downloaded: u64 = 0;
+
+  for card_res in iter_json_array::<Card, BufReader<std::fs::File>>(reader) {
+    if card_res.is_err() {
+      let err = card_res.err().unwrap();
+      warn!("Failed to read card: {}", err.to_string());
+      continue;
+    }
+    let card = card_res.unwrap();
+
     if card.image_uris.is_some() {
       let image_uris = card.image_uris.as_ref().unwrap();
-      let _ = download_card_images(&images_config, &client, &card.id, image_uris, images_dir);
+      let _ = download_card_images(&images_config, &client, &card.id, image_uris, images_dir).await;
     } else {
       let card_faces = card.card_faces.as_ref().expect("card_faces should exist when image_uris are absent");
 
       for card_face in card_faces {
         if card_face.image_uris.is_some() {
           let image_uris = card_face.image_uris.as_ref().unwrap();
-          let _ = download_card_images(&images_config, &client, &card.id, image_uris, images_dir);
+          let _ = download_card_images(&images_config, &client, &card.id, image_uris, images_dir).await;
         }
       }
     }
     
-    info!("STATUS: {}/{} cards downloaded", i + 1, cards.len());
+    num_downloaded += 1;
+    info!("STATUS: {} cards downloaded", num_downloaded);
   }
 
   return Ok(());
 }
 
-fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images_dir: &PathBuf, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+async fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images_dir: &PathBuf, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
   let default_cards_url = bulk_data
       .data
       .into_iter()
       .find(|item| item.name == "Default Cards")
       .expect("Could not find default cards")
       .download_uri;
+  
+  let bulk_data_filename = output_dir.join("bulk-data.json");
 
   info!("Default Cards URL: {}", default_cards_url);
 
   info!("Downloading bulk card data...");
-  let cards: Vec<Card> = client.get(&default_cards_url).send()?.json()?;
+
+  let data_file = File::create(&bulk_data_filename).await?;
+  let mut buf_writer = BufWriter::new(data_file);
   
-  let bulk_data_filename = output_dir.join("bulk-data.json");
+  let mut byte_stream = client
+    .get(&default_cards_url)
+    .send().await?
+    .bytes_stream();
 
-  let write_res = fs::write(bulk_data_filename, serde_json::to_string(&cards)?);
+  while let Some(item) = byte_stream.next().await {
+    let write_res = tokio::io::copy(&mut item?.as_ref(), &mut buf_writer).await;
 
-  if write_res.is_err() {
-    let err = write_res.err().unwrap();
-    warn!("Failed to write card data: {}", err.to_string());
+    if write_res.is_err() {
+      let err = write_res.err().unwrap();
+      warn!("Failed to write card data: {}", err.to_string());
 
-    return Ok(());
+      return Ok(());
+    }
   }
 
-  let _ = fetch_card_images(&client, cards, images_dir);
+  let _ = fetch_card_images(&client, &bulk_data_filename, images_dir).await;
 
   return Ok(());
 }
 
-fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+async fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
   let rulings_url = bulk_data
       .data
       .into_iter()
@@ -239,11 +266,19 @@ fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_di
   info!("Rulings URL: {}", rulings_url);
 
   info!("Downloading card ruling data...");
-  let cards: Vec<Ruling> = client.get(&rulings_url).send()?.json()?;
+  let rulings_res = client.get(&rulings_url).send().await;
+  if rulings_res.is_err() {
+    let err = rulings_res.err().unwrap();
+    warn!("Failed to fetch ruling data: {}", err.to_string());
+    
+    return Ok(());
+  }
+
+  let rulings: Vec<Ruling> = rulings_res.unwrap().json().await?;
   
   let ruling_data_filename = output_dir.join("ruling-data.json");
 
-  let write_res = fs::write(ruling_data_filename, serde_json::to_string(&cards)?);
+  let write_res = fs::write(ruling_data_filename, serde_json::to_string(&rulings)?);
 
   if write_res.is_err() {
     let err = write_res.err().unwrap();
@@ -253,9 +288,9 @@ fn download_card_rulings(client: &Client, bulk_data: BulkDataResponse, output_di
   return Ok(());
 }
 
-pub fn archive_scryfall() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn archive_scryfall() -> Result<(), Box<dyn std::error::Error>> {
   // Setup
-  let output_dir_str = var("SA_DATA_DIR").unwrap();
+  let output_dir_str = var("SA_DATA_DIR").unwrap_or(String::from("/data"));
   let output_dir  = Path::new(&output_dir_str);
   let images_dir = output_dir.join("card-images");
   
@@ -266,6 +301,7 @@ pub fn archive_scryfall() -> Result<(), Box<dyn std::error::Error>> {
   default_headers.append("Accept", HeaderValue::from_static("*/*"));
 
   let client = Client::builder()
+
     .default_headers(default_headers)
     .timeout(Duration::from_secs(60))
     .build()?;
@@ -274,12 +310,12 @@ pub fn archive_scryfall() -> Result<(), Box<dyn std::error::Error>> {
   info!("Fetching Scryfall bulk data list...");
   let bulk_data: BulkDataResponse = client
       .get("https://api.scryfall.com/bulk-data")
-      .send()?
-      .json()?;
+      .send().await?
+      .json().await?;
 
-  let _ = download_card_data(&client, bulk_data.clone(), &images_dir, output_dir);
+  let _ = download_card_data(&client, bulk_data.clone(), &images_dir, output_dir).await;
 
-  let _ = download_card_rulings(&client, bulk_data, output_dir);
+  let _ = download_card_rulings(&client, bulk_data, output_dir).await;
 
   info!("Archive Complete.");
   return Ok(());

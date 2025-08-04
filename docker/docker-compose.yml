@@ -11,11 +11,9 @@ services:
     restart: unless-stopped
     volumes:
       - /YOUR/DATA/PATH:/data
-    env_file:
-      - .env
     environment:
       SA_DATA_DIR: /data
-      SA_ARCHIVE_SCHEDULE: "0 2 1 * *"
+      SA_ARCHIVE_SCHEDULE: "0 2 1 * * * *"
       SA_BACKUP_SMALL_IMAGE: false
       SA_BACKUP_NORMAL_IMAGE: false
       SA_BACKUP_LARGE_IMAGE: false
