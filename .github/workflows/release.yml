@@ -41,7 +41,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: `${process.env.RELEASE_TAG}`,
-              name: `TabMaster ${process.env.RELEASE_TAG}`,
+              name: `Scryfall Archiver ${process.env.RELEASE_TAG}`,
               body: `${process.env.RELEASE_LOG}`,
               draft: true,
               prerelease: false
