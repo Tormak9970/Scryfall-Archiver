@@ -2,10 +2,8 @@ use log::{info, warn};
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
-use tokio::fs::File;
-use tokio::io::BufWriter;
-use std::fs;
-use std::io::BufReader;
+use std::{fs, io};
+use std::io::{BufReader, BufWriter};
 use std::time::Duration;
 use serde_json;
 use futures_util::StreamExt;
@@ -79,6 +77,10 @@ fn url_to_filename(url: &str) -> String {
 }
 
 async fn download_card_image(client: &Client, card_id: &str, url: String, images_dir: &Path) -> Result<u8, Box<dyn std::error::Error>> {
+  if !url.starts_with("https://cards.scryfall.io/") {
+    return Ok(0);
+  }
+  
   let image_path = url_to_filename(&url);
   let file_path = images_dir.join(&image_path);
 
@@ -212,6 +214,8 @@ async fn fetch_card_images(client: &Client, bulk_data_filename: &PathBuf, images
     
     num_downloaded += 1;
     info!("STATUS: {} cards downloaded", num_downloaded);
+
+    // sleep(Duration::from_millis(100)).await;
   }
 
   return Ok(());
@@ -231,7 +235,7 @@ async fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images
 
   info!("Downloading bulk card data...");
 
-  let data_file = File::create(&bulk_data_filename).await?;
+  let data_file = std::fs::File::create(&bulk_data_filename)?;
   let mut buf_writer = BufWriter::new(data_file);
   
   let mut byte_stream = client
@@ -239,16 +243,18 @@ async fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images
     .send().await?
     .bytes_stream();
 
-  while let Some(item) = byte_stream.next().await {
-    let write_res = tokio::io::copy(&mut item?.as_ref(), &mut buf_writer).await;
+  while let Some(bytes) = byte_stream.next().await {
+    let write_res = io::copy(&mut bytes?.as_ref(), &mut buf_writer);
 
     if write_res.is_err() {
       let err = write_res.err().unwrap();
-      warn!("Failed to write card data: {}", err.to_string());
+      warn!("Failed to write bulk card data: {}", err.to_string());
 
       return Ok(());
     }
   }
+  
+  info!("Downloaded bulk card data.");
 
   let _ = fetch_card_images(&client, &bulk_data_filename, images_dir).await;
 
