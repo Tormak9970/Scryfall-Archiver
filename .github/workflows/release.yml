@@ -81,7 +81,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ vars.DOCKER_USERNAME }}/scryfall-archiver:${{ steps.changelog.outputs.version }}
+            ${{ vars.DOCKER_USERNAME }}/scryfall-archiver:${{ needs.create-release.changelog.outputs.version }}
             ${{ vars.DOCKER_USERNAME }}/scryfall-archiver:latest
           labels: ${{ steps.meta.outputs.labels }}
 
