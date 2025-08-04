@@ -25,7 +25,7 @@ jobs:
         uses: Tormak9970/reliable-changelog@v1.1
         with:
           github-token: ${{ secrets.github_token }}
-          current-version: "./Cargo.toml"
+          current-version: "./version.json"
           version-path: "version"
           patch-version-bump-interval: "10"
 
