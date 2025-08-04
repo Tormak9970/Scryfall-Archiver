@@ -64,14 +64,14 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+          username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
-          images: travislane/scryfall-archiver
+          images: ${{ vars.DOCKER_USERNAME }}/scryfall-archiver
 
       - name: Build and push Docker image
         id: push
@@ -80,13 +80,15 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: travislane/scryfall-archiver:${{ steps.changelog.outputs.version }},travislane/scryfall-archiver:latest
+          tags: |
+            ${{ vars.DOCKER_USERNAME }}/scryfall-archiver:${{ steps.changelog.outputs.version }}
+            ${{ vars.DOCKER_USERNAME }}/scryfall-archiver:latest
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: index.docker.io/travislane/scryfall-archiver
+          subject-name: index.docker.io/${{ vars.DOCKER_USERNAME }}/scryfall-archiver
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
