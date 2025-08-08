@@ -1,5 +1,6 @@
 mod archiver;
 mod json_stream;
+mod types;
 
 use std::{env::var, str::FromStr, thread};
 

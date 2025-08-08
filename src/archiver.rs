@@ -1,9 +1,8 @@
 use log::{info, warn};
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
-use serde::{Deserialize, Serialize};
 use std::{fs, io};
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Write};
 use std::time::Duration;
 use serde_json;
 use futures_util::StreamExt;
@@ -11,59 +10,7 @@ use futures_util::StreamExt;
 use std::{env::var, path::{Path, PathBuf}};
 
 use crate::json_stream::iter_json_array;
-
-#[derive(Debug, Deserialize, Clone)]
-struct BulkDataItem {
-  name: String,
-  download_uri: String,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct BulkDataResponse {
-  data: Vec<BulkDataItem>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Card {
-  id: String,
-  image_uris: Option<ImageUris>,
-  card_faces: Option<Vec<CardFace>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct CardFace {
-  image_uris: Option<ImageUris>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Ruling {
-  object: String,
-  oracle_id: String,
-  source: String,
-  published_at: String,
-  comment: String,
-}
-
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ImageUris {
-  small: Option<String>,
-  normal: Option<String>,
-  large: Option<String>,
-  png: Option<String>,
-  art_crop: Option<String>,
-  border_crop: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ImagesConfig {
-  small: bool,
-  normal: bool,
-  large: bool,
-  png: bool,
-  art_crop: bool,
-  border_crop: bool,
-}
+use crate::types::{BulkDataResponse, Card, ImageUris, ImagesConfig, Ruling};
 
 
 // const IMAGE_URL_START: &str = "https://cards.scryfall.io/";
@@ -186,9 +133,9 @@ async fn fetch_card_images(client: &Client, bulk_data_filename: &PathBuf, images
     border_crop: bool_var("SA_BACKUP_BORDER_CROP_IMAGE"),
   };
 
-  let reader = BufReader::with_capacity(500000, std::fs::File::open(bulk_data_filename)?);
+  let reader = BufReader::new(std::fs::File::open(bulk_data_filename)?);
 
-  let mut num_downloaded: u64 = 0;
+  let mut num_downloaded: u64 = 95000;
 
   for card_res in iter_json_array::<Card, BufReader<std::fs::File>>(reader) {
     if card_res.is_err() {
@@ -200,22 +147,20 @@ async fn fetch_card_images(client: &Client, bulk_data_filename: &PathBuf, images
 
     if card.image_uris.is_some() {
       let image_uris = card.image_uris.as_ref().unwrap();
-      let _ = download_card_images(&images_config, &client, &card.id, image_uris, images_dir).await;
+      let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
     } else {
       let card_faces = card.card_faces.as_ref().expect("card_faces should exist when image_uris are absent");
 
       for card_face in card_faces {
         if card_face.image_uris.is_some() {
           let image_uris = card_face.image_uris.as_ref().unwrap();
-          let _ = download_card_images(&images_config, &client, &card.id, image_uris, images_dir).await;
+          let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
         }
       }
     }
     
     num_downloaded += 1;
     info!("STATUS: {} cards downloaded", num_downloaded);
-
-    // sleep(Duration::from_millis(100)).await;
   }
 
   return Ok(());
@@ -235,7 +180,15 @@ async fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images
 
   info!("Downloading bulk card data...");
 
-  let data_file = std::fs::File::create(&bulk_data_filename)?;
+  let data_file_res = std::fs::File::create(&bulk_data_filename);
+  if data_file_res.is_err() {
+    let err = data_file_res.err().unwrap();
+    warn!("Failed to create bulk card data file: {}", err.to_string());
+
+    return Ok(());
+  }
+  let data_file = data_file_res.ok().unwrap();
+
   let mut buf_writer = BufWriter::new(data_file);
   
   let mut byte_stream = client
@@ -253,6 +206,8 @@ async fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images
       return Ok(());
     }
   }
+
+  buf_writer.flush()?;
   
   info!("Downloaded bulk card data.");
 
@@ -307,7 +262,6 @@ pub async fn archive_scryfall() -> Result<(), Box<dyn std::error::Error>> {
   default_headers.append("Accept", HeaderValue::from_static("*/*"));
 
   let client = Client::builder()
-
     .default_headers(default_headers)
     .timeout(Duration::from_secs(60))
     .build()?;
