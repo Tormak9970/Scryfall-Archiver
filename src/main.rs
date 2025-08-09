@@ -8,13 +8,14 @@ use chrono::Utc;
 use cron::Schedule;
 use dotenv::dotenv;
 use log::info;
+use progress_bar::{init_logger};
 use crate::archiver::archive_scryfall;
 
 #[tokio::main]
 async fn main() {
   dotenv().ok();
   
-  pretty_env_logger::init_timed();
+  init_logger().unwrap();
 
   info!("Thread: Starting Archiver...");
 

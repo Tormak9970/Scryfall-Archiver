@@ -1,7 +1,8 @@
 use log::{info, warn};
+use progress_bar::{pb::ProgressBar, Color, Style};
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
-use std::{fs, io};
+use std::fs;
 use std::io::{BufReader, BufWriter, Write};
 use std::time::Duration;
 use serde_json;
@@ -135,7 +136,7 @@ async fn fetch_card_images(client: &Client, bulk_data_filename: &PathBuf, images
 
   let reader = BufReader::new(std::fs::File::open(bulk_data_filename)?);
 
-  let mut num_downloaded: u64 = 95000;
+  let mut num_downloaded: u64 = 0;
 
   for card_res in iter_json_array::<Card, BufReader<std::fs::File>>(reader) {
     if card_res.is_err() {
@@ -143,21 +144,21 @@ async fn fetch_card_images(client: &Client, bulk_data_filename: &PathBuf, images
       warn!("Failed to read card: {}", err.to_string());
       continue;
     }
-    let card = card_res.unwrap();
+    // let card = card_res.unwrap();
 
-    if card.image_uris.is_some() {
-      let image_uris = card.image_uris.as_ref().unwrap();
-      let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
-    } else {
-      let card_faces = card.card_faces.as_ref().expect("card_faces should exist when image_uris are absent");
+    // if card.image_uris.is_some() {
+    //   let image_uris = card.image_uris.as_ref().unwrap();
+    //   let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
+    // } else {
+    //   let card_faces = card.card_faces.as_ref().expect("card_faces should exist when image_uris are absent");
 
-      for card_face in card_faces {
-        if card_face.image_uris.is_some() {
-          let image_uris = card_face.image_uris.as_ref().unwrap();
-          let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
-        }
-      }
-    }
+    //   for card_face in card_faces {
+    //     if card_face.image_uris.is_some() {
+    //       let image_uris = card_face.image_uris.as_ref().unwrap();
+    //       let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
+    //     }
+    //   }
+    // }
     
     num_downloaded += 1;
     info!("STATUS: {} cards downloaded", num_downloaded);
@@ -191,13 +192,22 @@ async fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images
 
   let mut buf_writer = BufWriter::new(data_file);
   
-  let mut byte_stream = client
+  let response = client
     .get(&default_cards_url)
-    .send().await?
-    .bytes_stream();
+    .send().await?;
 
-  while let Some(bytes) = byte_stream.next().await {
-    let write_res = io::copy(&mut bytes?.as_ref(), &mut buf_writer);
+  let body_size = response.content_length().unwrap_or(0);
+
+  let mut byte_stream = response.bytes_stream();
+
+  
+  let mut downloaded: usize = 0;
+  let mut progress = ProgressBar::new(body_size as usize);
+  progress.set_action("Downloading", Color::Blue, Style::Bold);
+
+  while let Some(bytes_res) = byte_stream.next().await {
+    let bytes = bytes_res.expect("Bytes should have been ok");
+    let write_res = buf_writer.write_all(&mut bytes.as_ref());
 
     if write_res.is_err() {
       let err = write_res.err().unwrap();
@@ -205,7 +215,11 @@ async fn download_card_data(client: &Client, bulk_data: BulkDataResponse, images
 
       return Ok(());
     }
+
+    downloaded += bytes.len();
+    progress.set_progress(downloaded);
   }
+  progress.print_final_info("Loading", "Load complete", Color::LightGreen, Style::Bold);
 
   buf_writer.flush()?;
   
