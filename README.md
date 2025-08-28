@@ -9,6 +9,20 @@ To run Scryfall Archiver, simply use the following docker-compose, with any chan
 name: scryfall-archiver
 
 services:
+  postgres:
+    image: 'postgres:latest'
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    ports:
+      - 5432:5432
+    restart: unless-stopped
+    volumes:
+      - /YOUR/DATA/PATH/db/pg-data/:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: username # The PostgreSQL user (useful to connect to the database)
+      POSTGRES_PASSWORD: password # The PostgreSQL password (useful to connect to the database)
+
   scryfall-archiver:
     container_name: scryfall-archiver
     image: index.docker.io/travislane/scryfall-archiver:latest
@@ -21,6 +35,8 @@ services:
       SA_BACKUP_PNG_IMAGE: true
       SA_BACKUP_ART_CROP_IMAGE: false
       SA_BACKUP_BORDER_CROP_IMAGE: false
+      POSTGRES_USER: username # MUST MATCH THE VALUES USED FOR 'postgres'
+      POSTGRES_PASSWORD: password # MUST MATCH THE VALUES USED FOR 'postgres'
       SA_VERSION: "1.0.0"
       RUST_LOG: info
     volumes:
@@ -45,14 +61,17 @@ services:
 |  `SA_BACKUP_PNG_IMAGE`          |   Yes    | Whether to download the `png` image for each card |
 |  `SA_BACKUP_ART_CROP_IMAGE`     |   Yes    | Whether to download the `art_crop` image for each card |
 |  `SA_BACKUP_BORDER_CROP_IMAGE`  |   Yes    | Whether to download the `border_crop` image for each card |
+|  `POSTGRES_USER`                |   Yes    | The Postgres DB username |
+|  `POSTGRES_PASSWORD`            |   Yes    | The Postgres DB password |
 |  `SA_VERSION`                   |   No     | The Archiver Version |
 |  `RUST_LOG`                     |   No     | The log level |
 
 ### Volumes
 
-|  Volume  | Mount Point | Description            |
-|:-------: | :---------: | :--------------------- |
-|   Data   |   `/data`   | This is where all of the archived data will be stored. 
+|  Volume  | Mount Point                    | Description            |
+|:-------: | :----------------------------: | :--------------------- |
+|   Data   |   `/data`                      | This is where all of the archived data will be stored. |
+|  pg-data |   `/var/lib/postgresql/data`   | This is where all of the postgres data will be stored. |
 
 
 ## License
