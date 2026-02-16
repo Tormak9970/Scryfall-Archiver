@@ -21,8 +21,6 @@ services:
       SA_BACKUP_ART_CROP_IMAGE: false
       SA_BACKUP_BORDER_CROP_IMAGE: false
       SA_VERSION: "1.0.0"
-      POSTGRES_USER: username # MUST MATCH THE VALUES USED FOR 'postgres'
-      POSTGRES_PASSWORD: password # MUST MATCH THE VALUES USED FOR 'postgres'
       RUST_LOG: info
     healthcheck:
       disable: false
