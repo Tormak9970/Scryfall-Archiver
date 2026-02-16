@@ -1,20 +1,6 @@
 name: scryfall-archiver
 
 services:
-  postgres:
-    image: 'postgres:latest'
-    build:
-      context: ./
-      dockerfile: ./Dockerfile
-    ports:
-      - 5432:5432
-    restart: unless-stopped
-    volumes:
-      - /YOUR/DATA/PATH/db/pg-data/:/var/lib/postgresql/data/
-    environment:
-      POSTGRES_USER: username # The PostgreSQL user (useful to connect to the database)
-      POSTGRES_PASSWORD: password # The PostgreSQL password (useful to connect to the database)
-
   scryfall-archiver:
     container_name: scryfall-archiver
     command: ['/scryfall-archiver']

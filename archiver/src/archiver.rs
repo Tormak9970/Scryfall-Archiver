@@ -144,21 +144,21 @@ async fn fetch_card_images(client: &Client, bulk_data_filename: &PathBuf, images
       warn!("Failed to read card: {}", err.to_string());
       continue;
     }
-    // let card = card_res.unwrap();
+    let card = card_res.unwrap();
 
-    // if card.image_uris.is_some() {
-    //   let image_uris = card.image_uris.as_ref().unwrap();
-    //   let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
-    // } else {
-    //   let card_faces = card.card_faces.as_ref().expect("card_faces should exist when image_uris are absent");
+    if card.image_uris.is_some() {
+      let image_uris = card.image_uris.as_ref().unwrap();
+      let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
+    } else {
+      let card_faces = card.card_faces.as_ref().expect("card_faces should exist when image_uris are absent");
 
-    //   for card_face in card_faces {
-    //     if card_face.image_uris.is_some() {
-    //       let image_uris = card_face.image_uris.as_ref().unwrap();
-    //       let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
-    //     }
-    //   }
-    // }
+      for card_face in card_faces {
+        if card_face.image_uris.is_some() {
+          let image_uris = card_face.image_uris.as_ref().unwrap();
+          let _ = download_card_images(&images_config, client, &card.id, image_uris, images_dir).await;
+        }
+      }
+    }
     
     num_downloaded += 1;
     info!("STATUS: {} cards downloaded", num_downloaded);
